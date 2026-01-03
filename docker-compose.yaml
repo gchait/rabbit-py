@@ -7,6 +7,7 @@ services:
   rabbitmq:
     image: public.ecr.aws/docker/library/rabbitmq:4.2-management-alpine
     container_name: rabbit-py_rabbitmq
+    hostname: rabbitmq
     restart: unless-stopped
     networks:
       - rabbit-py
