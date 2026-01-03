@@ -1,0 +1,25 @@
+networks:
+  rabbit-py:
+    name: rabbit-py
+volumes:
+  rabbitmq_data:
+services:
+  rabbitmq:
+    image: public.ecr.aws/docker/library/rabbitmq:4.2-management-alpine
+    container_name: rabbit-py_rabbitmq
+    restart: unless-stopped
+    networks:
+      - rabbit-py
+    ports:
+      - 5672:5672 # AMQP
+      - 15672:15672 # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guy
+      RABBITMQ_DEFAULT_PASS: yug
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: 5
