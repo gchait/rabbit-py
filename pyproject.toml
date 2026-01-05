@@ -36,9 +36,13 @@ venv = ".venv"
 
 [tool.pdm.scripts]
 rabbitup = "docker compose up -d rabbitmq"
-rabbitdown = "docker compose down rabbitmq"
+rabbitdown = "docker compose down -v rabbitmq"
+
 fmt = "ruff format ."
-lint = ""
+chk = "ruff check --fix ."
+typechk = "mypy --pretty ."
 test = "pytest ./tests"
+
+lint = {composite = ["chk", "typechk"]}
 fint = {composite = ["fmt", "lint"]}
 qa = {composite = ["fint", "test"]}
