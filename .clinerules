@@ -1,4 +1,5 @@
 - This project is managed by `pdm`. Do not invoke Python or its packages/tools directly.
+- You don't need to activate the venv.
 - You may read `pyproject.toml` to understand it better and know the available scripts.
 - Target the Python 3.10 language level but don't use currently deprecated/removed syntax.
 - Prioritize working code first, then quality, then meaningful must-have tests last.
