@@ -3,8 +3,8 @@
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 
-from src import config
-from src.models import Order, OrderType
+from .. import config
+from ..models import Order, OrderType
 
 
 def publish_order(channel: BlockingChannel, order: Order) -> None:

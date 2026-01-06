@@ -6,9 +6,9 @@ import time
 from pika.adapters.blocking_connection import BlockingChannel
 from pika.spec import Basic, BasicProperties
 
-from src import config
-from src.models import EventType, Order, OrderEvent, OrderType
-from src.producers.event_producer import publish_event, publish_log
+from .. import config
+from ..models import EventType, Order, OrderEvent, OrderType
+from ..producers.event_producer import publish_event, publish_log
 
 
 def start_worker(

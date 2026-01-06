@@ -5,7 +5,7 @@ from typing import Callable
 import pika
 from pika.adapters.blocking_connection import BlockingChannel, BlockingConnection
 
-from src import config
+from . import config
 
 
 def create_connection() -> BlockingConnection:

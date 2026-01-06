@@ -2,7 +2,7 @@
 
 from pika.adapters.blocking_connection import BlockingChannel
 
-from src import config
+from . import config
 
 
 def setup_infrastructure(channel: BlockingChannel) -> None:

@@ -3,16 +3,16 @@
 import sys
 import time
 
-from src.connection import create_channel, create_connection
-from src.consumers.analytics import start_analytics_service
-from src.consumers.log_consumer import start_log_service
-from src.consumers.notification import start_notification_service
-from src.consumers.order_worker import get_queue_for_order_type, start_worker
-from src.exchanges import setup_infrastructure
-from src.models import EventType, Order, OrderEvent, OrderType
-from src.producers.event_producer import publish_event, publish_log
-from src.producers.order_producer import publish_order
-from src.rpc.inventory_rpc import InventoryRPCClient, InventoryRPCServer
+from .connection import create_channel, create_connection
+from .consumers.analytics import start_analytics_service
+from .consumers.log_consumer import start_log_service
+from .consumers.notification import start_notification_service
+from .consumers.order_worker import get_queue_for_order_type, start_worker
+from .exchanges import setup_infrastructure
+from .models import EventType, Order, OrderEvent, OrderType
+from .producers.event_producer import publish_event, publish_log
+from .producers.order_producer import publish_order
+from .rpc.inventory_rpc import InventoryRPCClient, InventoryRPCServer
 
 
 def demo_setup() -> None:

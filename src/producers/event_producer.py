@@ -3,8 +3,8 @@
 import pika
 from pika.adapters.blocking_connection import BlockingChannel
 
-from src import config
-from src.models import OrderEvent
+from .. import config
+from ..models import OrderEvent
 
 
 def publish_event(channel: BlockingChannel, event: OrderEvent) -> None:
