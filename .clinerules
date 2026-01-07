@@ -1,6 +1,6 @@
 - This project is managed by `pdm`. Do not invoke Python or its packages/tools directly.
-- You don't need to activate the venv.
 - You may read `pyproject.toml` to understand it better and know the available scripts.
+- You don't need to activate the venv.
 - Target the Python 3.10 language level but don't use currently deprecated/removed syntax.
 - Prioritize working code first, then quality, then meaningful must-have tests last.
 - Always use correct type hints.
@@ -10,14 +10,15 @@
 - Keep human readability and maintainability in mind when designing a solution or refactoring.
 - Apply SOLID principles pragmatically, don't over-abstract for future flexibility.
 - Implement everything, don't leave TODO comments or missing parts.
-- Understand your task, don't make guesses, stop and ask questions if anything is unclear.
+- Understand the requirements, don't make guesses, stop and ask questions if anything is unclear.
 - Any test must be unique in purpose.
 - Method arguments should be unique in purpose and not contain information other ones do.
 - Use relative imports within a package.
-- DRY is a very high priority, refactor things that exist in multiple places.
+- DRY is a high priority, refactor things that exist in multiple places.
 - Unused/unreachable objects should be removed.
 - Imports belong at the top of the file.
 - Code is a liability, do not over-engineer.
 - For error handling, be explicit about what exceptions can be raised.
 - Prefer composition over inheritance where reasonable.
 - Use descriptive variable names, avoid abbreviations unless domain-standard.
+- Use RabbitMQ best practices, don't make shortcuts like auto ack.
