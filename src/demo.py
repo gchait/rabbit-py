@@ -1,270 +1,209 @@
-"""Main demonstration script showcasing RabbitMQ concepts."""
+"""RabbitMQ demonstration CLI."""
 
 import sys
+import threading
 import time
+from collections.abc import Callable
 
-from .connection import create_channel, create_connection
-from .consumers.analytics import start_analytics_service
-from .consumers.log_consumer import start_log_service
-from .consumers.notification import start_notification_service
-from .consumers.order_worker import get_queue_for_order_type, start_worker
-from .exchanges import setup_infrastructure
-from .models import EventType, Order, OrderEvent, OrderType
-from .producers.event_producer import publish_event, publish_log
-from .producers.order_producer import publish_order
-from .rpc.inventory_rpc import InventoryRPCClient, InventoryRPCServer
+from .analytics import run_analytics_service
+from .connection import create_connection
+from .log_consumer import run_log_consumer
+from .notification import run_notification_service
+from .producer import publish_orders
+from .rpc import check_inventory, run_rpc_server
+from .setup import setup_infrastructure
+from .worker import start_worker
 
 
-def demo_setup() -> None:
-    """Set up RabbitMQ infrastructure."""
-    print("\n" + "=" * 80)
-    print("DEMO: Setting up RabbitMQ infrastructure")
-    print("=" * 80)
+def run_full_demo() -> None:
+    """Run complete demo with all components in a single terminal."""
+    print("🚀 Starting RabbitMQ Full Demo\n")
+    print("=" * 60)
 
+    # Setup infrastructure
     connection = create_connection()
-    try:
-        channel = create_channel(connection)
-        setup_infrastructure(channel)
-    finally:
-        connection.close()
+    channel = connection.channel()
+    setup_infrastructure(channel)
+    connection.close()
 
-    print("\n✅ Infrastructure setup complete!")
+    print("\n📋 Starting all services...\n")
+
+    # Track stop flag for error handling
+    stop_event = threading.Event()
+
+    def run_service(name: str, func: Callable[[], None]) -> None:
+        """Run a service in thread with error handling."""
+        try:
+            print(f"   ✓ {name} started")
+            func()
+        except Exception as e:
+            if not stop_event.is_set():
+                print(f"   ✗ {name} error: {e}")
+
+    # Start RPC server
+    rpc_thread = threading.Thread(
+        target=run_service,
+        args=("RPC Server", run_rpc_server),
+        daemon=True,
+    )
+    rpc_thread.start()
+    time.sleep(0.5)
+
+    # Start notification service
+    notif_thread = threading.Thread(
+        target=run_service,
+        args=("Notification Service", run_notification_service),
+        daemon=True,
+    )
+    notif_thread.start()
+    time.sleep(0.3)
+
+    # Start analytics service
+    analytics_thread = threading.Thread(
+        target=run_service,
+        args=("Analytics Service", run_analytics_service),
+        daemon=True,
+    )
+    analytics_thread.start()
+    time.sleep(0.3)
+
+    # Start log consumer
+    log_thread = threading.Thread(
+        target=run_service,
+        args=("Log Service", run_log_consumer),
+        daemon=True,
+    )
+    log_thread.start()
+    time.sleep(0.3)
+
+    # Start worker
+    def worker_wrapper() -> None:
+        conn = create_connection()
+        ch = conn.channel()
+        start_worker(ch, "W1")
+
+    worker_thread = threading.Thread(
+        target=run_service,
+        args=("Order Worker", worker_wrapper),
+        daemon=True,
+    )
+    worker_thread.start()
     time.sleep(1)
 
+    print("\n" + "=" * 60)
+    print("\n💡 All services running! Now demonstrating RabbitMQ patterns...\n")
+    time.sleep(1)
 
-def demo_producer() -> None:
-    """Demonstrate order production with different types."""
-    print("\n" + "=" * 80)
-    print("DEMO: Publishing orders via Direct Exchange")
-    print("=" * 80)
+    # Demonstrate RPC pattern
+    print("=" * 60)
+    print("📞 RPC Pattern Demo (Request/Response)")
+    print("=" * 60)
+    for product_id in ["PROD-123", "PROD-999", "PROD-456"]:
+        result = check_inventory(product_id)
+        if result:
+            status = "✓ IN STOCK" if result.get("in_stock") else "✗ OUT OF STOCK"
+            print(f"   {product_id}: {status} ({result.get('quantity', 0)} units)")
+        time.sleep(0.5)
 
+    print("\n" + "=" * 60)
+    print("📦 Publishing Orders (Direct Exchange → Work Queue)")
+    print("=" * 60)
+
+    # Publish orders
     connection = create_connection()
+    channel = connection.channel()
     try:
-        channel = create_channel(connection)
-
-        orders = [
-            Order("ORD-001", "CUST-101", "PROD-A", 2, OrderType.STANDARD),
-            Order("ORD-002", "CUST-102", "PROD-B", 5, OrderType.EXPRESS),
-            Order("ORD-003", "CUST-103", "PROD-C", 1, OrderType.INTERNATIONAL),
-            Order("ORD-004", "CUST-104", "PROD-D", 3, OrderType.STANDARD),
-        ]
-
-        for order in orders:
-            # Publish order creation event
-            event = OrderEvent(
-                event_type=EventType.ORDER_CREATED,
-                order_id=order.order_id,
-                message=f"Order created for customer {order.customer_id}",
-                metadata={"product_id": order.product_id, "quantity": order.quantity},
-            )
-            publish_event(channel, event)
-            publish_log(channel, event, order.order_type.value)
-
-            # Publish order to appropriate queue
-            publish_order(channel, order)
-            time.sleep(0.5)
-
+        publish_orders(channel)
     finally:
         connection.close()
 
-    print("\n✅ All orders published!")
-    time.sleep(2)
+    print("\n" + "=" * 60)
+    print("⏳ Processing orders... (watch the logs above)")
+    print("=" * 60)
+    print("\nYou should see:")
+    print("  • Worker processing orders (Direct Exchange → Work Queue)")
+    print("  • Notifications & Analytics receiving events (Fanout Exchange)")
+    print("  • Logs matching pattern 'order.#' (Topic Exchange)")
+    print("\nPress CTRL+C to exit...")
 
-
-def demo_worker(
-    worker_id: str, order_type: OrderType, should_fail: bool = False
-) -> None:
-    """
-    Run an order worker.
-
-    Args:
-        worker_id: Identifier for this worker.
-        order_type: Type of orders this worker processes.
-        should_fail: Whether to simulate failures.
-    """
-    print("\n" + "=" * 80)
-    print(f"DEMO: Starting Worker {worker_id} for {order_type.value} orders")
-    print("=" * 80)
-
-    connection = create_connection()
     try:
-        channel = create_channel(connection)
-        queue_name = get_queue_for_order_type(order_type)
-        start_worker(channel, queue_name, worker_id, should_fail)
-    finally:
-        connection.close()
-
-
-def demo_notification_service() -> None:
-    """Run the notification service."""
-    print("\n" + "=" * 80)
-    print("DEMO: Starting Notification Service (Fanout Subscriber)")
-    print("=" * 80)
-
-    connection = create_connection()
-    try:
-        channel = create_channel(connection)
-        start_notification_service(channel)
-    finally:
-        connection.close()
-
-
-def demo_analytics_service() -> None:
-    """Run the analytics service."""
-    print("\n" + "=" * 80)
-    print("DEMO: Starting Analytics Service (Fanout Subscriber)")
-    print("=" * 80)
-
-    connection = create_connection()
-    try:
-        channel = create_channel(connection)
-        start_analytics_service(channel)
-    finally:
-        connection.close()
-
-
-def demo_log_service() -> None:
-    """Run the log service."""
-    print("\n" + "=" * 80)
-    print("DEMO: Starting Log Service (Topic Exchange)")
-    print("=" * 80)
-
-    connection = create_connection()
-    try:
-        channel = create_channel(connection)
-        start_log_service(channel)
-    finally:
-        connection.close()
-
-
-def demo_rpc_server() -> None:
-    """Run the RPC server."""
-    print("\n" + "=" * 80)
-    print("DEMO: Starting Inventory RPC Server")
-    print("=" * 80)
-
-    connection = create_connection()
-    try:
-        channel = create_channel(connection)
-        server = InventoryRPCServer(channel)
-        server.start()
-    finally:
-        connection.close()
-
-
-def demo_rpc_client() -> None:
-    """Demonstrate RPC client making requests."""
-    print("\n" + "=" * 80)
-    print("DEMO: Making RPC inventory checks")
-    print("=" * 80)
-
-    connection = create_connection()
-    try:
-        channel = create_channel(connection)
-        client = InventoryRPCClient(channel)
-
-        products = [
-            ("PROD-A", 2),
-            ("PROD-B", 5),
-            ("PROD-C", 1),
-        ]
-
-        for product_id, quantity in products:
-            print(f"\n🔍 Checking inventory for {product_id}, quantity {quantity}...")
-            result = client.check_inventory(product_id, quantity)
-            print(f"   Result: {result}")
+        # Keep main thread alive
+        while True:
             time.sleep(1)
-
-    finally:
-        connection.close()
-
-    print("\n✅ RPC demo complete!")
-
-
-def print_usage() -> None:
-    """Print usage instructions."""
-    print("\n" + "=" * 80)
-    print("RABBITMQ ORDER PROCESSING DEMO")
-    print("=" * 80)
-    print("\nThis demo showcases key RabbitMQ concepts:")
-    print("  • Direct Exchange - Route orders by type")
-    print("  • Fanout Exchange - Broadcast events to multiple subscribers")
-    print("  • Topic Exchange - Pattern-based log routing")
-    print("  • Work Queues - Competing consumers with fair dispatch")
-    print("  • Dead Letter Exchange - Handle failed messages")
-    print("  • Message Acknowledgments - Reliable processing")
-    print("  • RPC Pattern - Synchronous request/response")
-    print("\nUsage:")
-    print("  pdm run python -m src.demo setup              # Setup infrastructure")
-    print("  pdm run python -m src.demo producer           # Publish orders")
-    print("  pdm run python -m src.demo worker <type> [id] # Start order worker")
-    print(
-        "  pdm run python -m src.demo notification       # Start notification service"
-    )
-    print("  pdm run python -m src.demo analytics          # Start analytics service")
-    print("  pdm run python -m src.demo logs               # Start log service")
-    print("  pdm run python -m src.demo rpc-server         # Start RPC server")
-    print("  pdm run python -m src.demo rpc-client         # Make RPC calls")
-    print("\nOrder types: standard, express, international")
-    print("\nRecommended flow:")
-    print("  1. Run 'setup' in one terminal")
-    print("  2. Start 'rpc-server' in another terminal (for inventory checks)")
-    print("  3. Start 'notification', 'analytics', 'logs' in separate terminals")
-    print("  4. Start multiple 'worker' instances with different IDs")
-    print("  5. Run 'producer' to send orders and watch them flow through!")
-    print("  6. Test 'rpc-client' to see synchronous RPC pattern")
-    print("=" * 80 + "\n")
+    except KeyboardInterrupt:
+        print("\n\n👋 Shutting down all services...")
+        stop_event.set()
 
 
 def main() -> None:
     """Main entry point for the demo."""
     if len(sys.argv) < 2:
-        print_usage()
+        print("RabbitMQ Order Processing Demo\n")
+        print("Usage:")
+        print(
+            "  pdm run demo                # Run full demo (all patterns in one terminal)"
+        )
+        print("  pdm run demo worker [id]    # Start order worker (default: W1)")
+        print("  pdm run demo notification   # Start notification service")
+        print("  pdm run demo analytics      # Start analytics service")
+        print("  pdm run demo logs           # Start log consumer")
+        print("  pdm run demo rpc-server     # Start RPC server")
+        print("  pdm run demo rpc-client     # Test RPC client")
+        print("  pdm run demo produce        # Publish sample orders\n")
+        print("💡 Tip: Run 'pdm run demo' for a complete demonstration!")
         return
 
     command = sys.argv[1]
 
     try:
-        if command == "setup":
-            demo_setup()
-        elif command == "producer":
-            demo_producer()
-        elif command == "worker":
-            if len(sys.argv) < 3:
-                print(
-                    "Error: worker requires order type (standard|express|international)"
-                )
-                print("Usage: pdm run python -m src.demo worker <type> [id]")
-                return
-            order_type_str = sys.argv[2]
-            worker_id = sys.argv[3] if len(sys.argv) > 3 else "W1"
-            try:
-                order_type = OrderType(order_type_str)
-                demo_worker(worker_id, order_type)
-            except ValueError:
-                print(f"Error: Invalid order type '{order_type_str}'")
-                print("Valid types: standard, express, international")
-        elif command == "notification":
-            demo_notification_service()
+        if command == "full" or command == "all":
+            run_full_demo()
+            return
+
+        # Services that manage their own connections
+        if command == "notification":
+            run_notification_service()
+            return
         elif command == "analytics":
-            demo_analytics_service()
+            run_analytics_service()
+            return
         elif command == "logs":
-            demo_log_service()
+            run_log_consumer()
+            return
         elif command == "rpc-server":
-            demo_rpc_server()
+            run_rpc_server()
+            return
+
+        # Commands that need a connection
+        connection = create_connection()
+        channel = connection.channel()
+
+        # Auto-setup infrastructure on first run
+        setup_infrastructure(channel)
+
+        if command == "worker":
+            worker_id = sys.argv[2] if len(sys.argv) > 2 else "W1"
+            start_worker(channel, worker_id)
         elif command == "rpc-client":
-            demo_rpc_client()
+            for product_id in ["PROD-123", "PROD-999", "PROD-456"]:
+                result = check_inventory(product_id)
+                print(f"Result: {result}")
+        elif command == "produce":
+            publish_orders(channel)
         else:
             print(f"Unknown command: {command}")
-            print_usage()
+            return
+
+        connection.close()
+
     except KeyboardInterrupt:
-        print("\n\n👋 Shutting down gracefully...")
+        print("\n\n👋 Shutting down...")
     except Exception as e:
         print(f"\n❌ Error: {e}")
-        import traceback
-
-        traceback.print_exc()
 
 
 if __name__ == "__main__":
+    # Default to full demo if no args
+    if len(sys.argv) == 1:
+        sys.argv.append("full")
     main()

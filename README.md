@@ -1,20 +1,20 @@
 # RabbitMQ Order Processing Demo
 
-A comprehensive demonstration of RabbitMQ concepts using Python and an e-commerce order processing system. Learn RabbitMQ patterns through a practical, working example!
+A comprehensive demonstration of RabbitMQ concepts using Python. Learn all major RabbitMQ patterns through a practical, working example—all in **one terminal**!
 
-## 🎯 RabbitMQ Concepts Demonstrated
+## 🎯 What You'll Learn
 
-| Concept                     | Implementation                                        | File                                                   |
-| --------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| **Direct Exchange**         | Route orders by type (standard/express/international) | `exchanges.py`, `order_producer.py`                    |
-| **Fanout Exchange**         | Broadcast events to notification & analytics services | `event_producer.py`, `notification.py`, `analytics.py` |
-| **Topic Exchange**          | Pattern-based log routing with hierarchical keys      | `log_consumer.py`                                      |
-| **Work Queues**             | Multiple workers competing for orders                 | `order_worker.py`                                      |
-| **Fair Dispatch**           | QoS with prefetch_count for load balancing            | `order_worker.py`                                      |
-| **Message Acknowledgments** | Manual ack/nack for reliability                       | All consumers                                          |
-| **Dead Letter Exchange**    | Handle failed messages automatically                  | `exchanges.py`                                         |
-| **Message Persistence**     | Durable queues and persistent messages                | All producers                                          |
-| **RPC Pattern**             | Synchronous request/response for inventory checks     | `inventory_rpc.py`                                     |
+| Concept                  | Description                          | Where to See It                    |
+| ------------------------ | ------------------------------------ | ---------------------------------- |
+| **Direct Exchange**      | Route messages by exact key match    | Orders routed to work queue        |
+| **Fanout Exchange**      | Broadcast to all bound queues        | Events → Notifications & Analytics |
+| **Topic Exchange**       | Pattern-based routing with wildcards | Logs matching `order.#` pattern    |
+| **Work Queues**          | Multiple workers competing for tasks | Order processing                   |
+| **Fair Dispatch (QoS)**  | Load balancing with prefetch_count   | Worker distribution                |
+| **Manual Ack/Nack**      | Reliable message processing          | Order acknowledgments              |
+| **Dead Letter Exchange** | Failed message handling              | Failed orders → DLQ                |
+| **Message Persistence**  | Survive broker restarts              | Durable queues & messages          |
+| **RPC Pattern**          | Request/Response over messaging      | Inventory checks                   |
 
 ## 🚀 Quick Start
 
@@ -26,364 +26,285 @@ pdm run rabbitup
 
 Access RabbitMQ Management UI at http://localhost:15672 (user: `guy`, password: `yug`)
 
-### 2. Setup Infrastructure
+### 2. Run the Complete Demo
 
 ```bash
-pdm run python -m src.demo setup
+pdm run demo
 ```
 
-This creates all exchanges, queues, and bindings.
+**That's it!** This single command:
 
-### 3. Run the Demo
+- Sets up all infrastructure (exchanges, queues, bindings)
+- Starts all services (RPC, notifications, analytics, logs, worker)
+- Demonstrates RPC pattern with inventory checks
+- Publishes and processes orders
+- Shows all RabbitMQ patterns in action
 
-Open **multiple terminals** and run these commands to see the system in action:
-
-**Terminal 1 - RPC Server:**
-
-```bash
-pdm run python -m src.demo rpc-server
-```
-
-**Terminal 2 - Notification Service:**
-
-```bash
-pdm run python -m src.demo notification
-```
-
-**Terminal 3 - Analytics Service:**
-
-```bash
-pdm run python -m src.demo analytics
-```
-
-**Terminal 4 - Log Service:**
-
-```bash
-pdm run python -m src.demo logs
-```
-
-**Terminal 5 - Worker for Standard Orders:**
-
-```bash
-pdm run python -m src.demo worker standard W1
-```
-
-**Terminal 6 - Worker for Express Orders:**
-
-```bash
-pdm run python -m src.demo worker express W2
-```
-
-**Terminal 7 - Worker for International Orders:**
-
-```bash
-pdm run python -m src.demo worker international W3
-```
-
-**Terminal 8 - Publish Orders:**
-
-```bash
-pdm run python -m src.demo producer
-```
-
-Now watch the messages flow through the system! Each service will log what it receives.
-
-### 4. Test RPC Pattern
-
-```bash
-pdm run python -m src.demo rpc-client
-```
+Watch the output to see messages flow through different exchanges and queues!
 
 ## 📋 Available Commands
 
+### Primary Command
+
 ```bash
-# Infrastructure
-pdm run python -m src.demo setup              # Setup exchanges/queues
+pdm run demo              # Full demo in one terminal (recommended!)
+```
+
+### Individual Component Commands
+
+For experimentation and learning:
+
+```bash
+# Consumers
+pdm run demo worker [id]  # Start order worker (default: W1)
+pdm run demo notification # Start notification service
+pdm run demo analytics    # Start analytics service
+pdm run demo logs         # Start log consumer
 
 # Producers
-pdm run python -m src.demo producer           # Publish sample orders
-
-# Consumers
-pdm run python -m src.demo worker <type> [id] # Start worker (standard|express|international)
-pdm run python -m src.demo notification       # Start notification service
-pdm run python -m src.demo analytics          # Start analytics service
-pdm run python -m src.demo logs               # Start log service
+pdm run demo produce      # Publish sample orders
 
 # RPC
-pdm run python -m src.demo rpc-server         # Start inventory RPC server
-pdm run python -m src.demo rpc-client         # Make RPC requests
-
-# Help
-pdm run python -m src.demo                    # Show help
+pdm run demo rpc-server   # Start RPC server
+pdm run demo rpc-client   # Test RPC calls
 ```
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐
-│  Producer   │
-│  (Orders)   │
-└──────┬──────┘
-       │
-       ▼
-┌────────────────┐    routing_key     ┌──────────────────┐
-│ Direct Exchange├───────────────────▶│ orders.standard  │──▶ Worker 1
-│ (orders.direct)│                    └──────────────────┘
-└────────────────┘                    ┌──────────────────┐
-                 ├───────────────────▶│ orders.express   │──▶ Worker 2
-                 │                    └──────────────────┘
-                 │                    ┌──────────────────┐
-                 └───────────────────▶│orders.international│▶ Worker 3
-                                      └──────────────────┘
-                                              │
-                                              ▼ (on failure)
-                                      ┌──────────────────┐
-                                      │    Dead Letter   │
-                                      │      Queue       │
-                                      └──────────────────┘
+Producer → Direct Exchange ──(routing_key)──→ Orders Queue → Workers
+              (orders.direct)                                    │
+                                                                 ├→ Fanout Exchange → Notifications Queue
+                                                                 │   (events.fanout) → Analytics Queue
+                                                                 │
+                                                                 └→ Topic Exchange ──(order.#)──→ Logs Queue
+                                                                     (logs.topic)
 
-┌─────────────┐
-│   Workers   │─────┐
-│ (Publish    │     │
-│  Events)    │     ▼
-└─────────────┘  ┌────────────────┐           ┌──────────────┐
-                 │ Fanout Exchange├──────────▶│ notifications│
-                 │ (events.fanout)│           └──────────────┘
-                 └────────────────┘           ┌──────────────┐
-                                  └───────────▶│  analytics   │
-                                              └──────────────┘
+RPC Client ←────(request/response)────→ RPC Server
+           (correlation_id, reply_to)
 
-                 ┌────────────────┐  order.#  ┌──────────────┐
-                 │ Topic Exchange ├──────────▶│   logs.all   │
-                 │  (logs.topic)  │           └──────────────┘
-                 └────────────────┘
-
-┌─────────────┐        request        ┌──────────────┐
-│ RPC Client  │◀─────────────────────▶│  RPC Server  │
-│             │        response       │  (Inventory) │
-└─────────────┘                       └──────────────┘
-```
-
-## 📁 Project Structure
-
-```
-src/
-├── config.py              # Configuration and constants
-├── connection.py          # RabbitMQ connection management
-├── exchanges.py           # Exchange/queue/binding setup
-├── models.py              # Order and Event data models
-├── demo.py                # Main demonstration script
-├── producers/
-│   ├── order_producer.py  # Publishes orders to direct exchange
-│   └── event_producer.py  # Publishes events to fanout/topic exchanges
-├── consumers/
-│   ├── order_worker.py    # Processes orders (work queue)
-│   ├── notification.py    # Fanout subscriber for notifications
-│   ├── analytics.py       # Fanout subscriber for analytics
-│   └── log_consumer.py    # Topic subscriber for logs
-└── rpc/
-    └── inventory_rpc.py   # RPC server and client for inventory
+Failed Messages → Dead Letter Exchange → Dead Letter Queue
+                      (orders.dlx)         (orders.failed)
 ```
 
 ## 📖 Concept Explanations
 
 ### Direct Exchange
 
-**What it does:** Routes messages to queues based on an exact match between the routing key and the queue's binding key.
+Routes messages based on **exact matching** between routing key and binding key.
 
-**How it works in this demo:**
+**In this demo:** Orders published with `routing_key="order"` go only to the orders queue bound with that key.
 
-- Producer sends an order with routing key `order.standard`
-- Direct exchange checks which queues are bound to `order.standard`
-- Message is delivered only to the `orders.standard` queue
+**Why use it:** Type-safe routing—each message type goes to its specific queue. Like a postal service sorting mail by exact zip codes.
 
-**Why use it:** When you need type-safe routing where each message type goes to a specific queue. Perfect for separating different kinds of work (standard vs express vs international orders).
+**Real-world:** Task queues, job processing, request routing.
 
-**Real-world use:** Task distribution systems, job queues where different job types need different handlers.
+---
 
 ### Fanout Exchange
 
-**What it does:** Broadcasts every message it receives to ALL queues bound to it, ignoring routing keys entirely.
+Broadcasts **every message** to **all** queues bound to it, ignoring routing keys.
 
-**How it works in this demo:**
+**In this demo:** When a worker completes an order, it publishes an event. Both notification AND analytics services receive the same event.
 
-- When a worker processes an order, it publishes an event to the fanout exchange
-- Both the notification service AND analytics service receive the same event
-- Each service processes it independently for different purposes
+**Why use it:** Pub/Sub pattern—one event triggers multiple independent actions. Like a notification system broadcasting to email, SMS, and push notifications.
 
-**Why use it:** Publishing/Subscribe pattern - when multiple services need to react to the same event independently. Like a notification system where one event triggers email, SMS, and push notifications.
+**Real-world:** Logging systems, real-time dashboards, cache invalidation, notifications.
 
-**Real-world use:** Logging systems, real-time dashboards, notification services, cache invalidation.
+---
 
 ### Topic Exchange
 
-**What it does:** Routes messages based on pattern matching with wildcards:
+Routes based on **pattern matching** with wildcards:
 
-- `*` (star) matches exactly one word
-- `#` (hash) matches zero or more words
+- `*` matches exactly one word
+- `#` matches zero or more words
 
-**How it works in this demo:**
+**In this demo:** Logs published with keys like `order.created` and `order.completed` both match the pattern `order.#`.
 
-- Messages published with keys like `order.created.standard` or `order.completed.express`
-- Log queue bound with pattern `order.#` receives all messages starting with "order."
-- You could bind another queue with `order.*.express` to get only express orders
+**Why use it:** Flexible, hierarchical routing. More control than fanout, more flexibility than direct.
 
-**Why use it:** Flexible, hierarchical routing. When you need more complex filtering than direct exchange but more structure than fanout.
+**Real-world:** Log aggregation (`error.*`, `info.*`), geographic routing (`us.east.*`, `eu.*`), multi-tenant systems.
 
-**Real-world use:** Log aggregation (error._, info._), geographic routing (us.east._, eu.west._), multi-tenant systems.
+---
 
-### Work Queues (Competing Consumers Pattern)
+### Work Queues (Competing Consumers)
 
-**What it does:** Multiple workers (consumers) pull tasks from the same queue. Each message goes to exactly ONE worker.
+Multiple workers consume from the **same queue**. Each message goes to **exactly one** worker.
 
-**How it works in this demo:**
+**In this demo:** Multiple workers can process orders. RabbitMQ distributes messages among them.
 
-- Messages sit in `orders.standard` queue
-- You can start multiple workers (W1, W2, W3) all consuming from that queue
-- RabbitMQ distributes messages among them (by default round-robin)
-- If W1 is processing, the next message goes to W2
+**Why use it:** Horizontal scaling—handle more work by adding workers. Provides redundancy if a worker crashes.
 
-**Why use it:** Horizontal scaling - handle more work by adding more workers. Also provides redundancy - if one worker crashes, others continue.
+**Real-world:** Background jobs, video encoding, email sending, image processing.
 
-**Real-world use:** Background job processing, video encoding, image resizing, email sending.
+---
 
 ### QoS (Quality of Service) & Fair Dispatch
 
-**What QoS is:** Quality of Service - settings that control how RabbitMQ delivers messages to consumers.
+`prefetch_count=1` means "only give me 1 message at a time—I must ack before getting another."
 
-**prefetch_count explained:**
-
-- `prefetch_count=1` means "only give me 1 message at a time"
-- Worker must acknowledge (ack) the message before RabbitMQ sends another
-- Without this, RabbitMQ might send 100 messages to one worker at once
-
-**How it works in this demo:**
-
-```python
-channel.basic_qos(prefetch_count=1)  # Fair dispatch enabled
-```
-
-- Each worker gets one message
-- Must complete it (ack) before getting another
-- Fast workers process more messages than slow workers
+**In this demo:** Each worker processes one order at a time. Fast workers automatically get more work than slow ones.
 
 **Why use it:**
 
-- Without it: Round-robin might send 50 quick tasks to Worker1 and 50 slow tasks to Worker2
-- With it: Fast workers automatically get more work - true load balancing
-- Prevents one worker from hoarding all messages while being slow
+- **Without it:** Round-robin might give 50 quick tasks to Worker1 and 50 slow tasks to Worker2
+- **With it:** True load balancing—fast workers handle more
 
-**Real-world use:** Any multi-worker system where tasks have variable processing times.
+**Real-world:** Any multi-worker system with variable processing times.
+
+---
 
 ### Message Acknowledgments (ack/nack)
 
-**What they are:** Signals from consumer back to RabbitMQ about message processing status.
+Signals from consumer to RabbitMQ about processing status:
 
-**Types:**
+- **ack:** "Success—delete this message"
+- **nack(requeue=False):** "Failed—send to DLX"
+- **nack(requeue=True):** "Failed—try again"
 
-- **ack (acknowledge):** "I successfully processed this message, you can delete it"
-- **nack (negative acknowledge):** "I couldn't process this, requeue it or send to DLX (Dead Letter Exchange)"
-- **reject:** Similar to nack but for single messages
-
-**How it works in this demo:**
-
-```python
-# Success
-ch.basic_ack(delivery_tag=method.delivery_tag)
-
-# Failure - send to DLX
-ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-```
+**In this demo:** Workers ack on success, nack on failure. Failed messages go to Dead Letter Queue.
 
 **Why use manual acks:**
 
-- If worker crashes mid-processing, message is NOT lost
-- RabbitMQ sees no ack arrived, redelivers message to another worker
-- Auto-ack would delete message immediately = potential data loss
+- If worker crashes mid-processing, message isn't lost
+- RabbitMQ redelivers to another worker
+- Auto-ack would delete messages immediately = data loss risk
 
-**Real-world use:** Any system where message loss is unacceptable - financial transactions, order processing, critical notifications.
+**Real-world:** Any system where message loss is unacceptable—financial transactions, orders, critical notifications.
+
+---
 
 ### Dead Letter Exchange (DLX)
 
-**What it is:** A "backup" exchange where failed messages automatically go.
+A "backup" exchange where failed messages automatically go.
 
-**How it works in this demo:**
+**In this demo:** Order queue configured with `x-dead-letter-exchange: orders.dlx`. When worker nacks with `requeue=False`, message routes to DLX → DLQ.
 
-- Order queues configured with `x-dead-letter-exchange: orders.dlx`
-- When worker sends nack with requeue=False, message goes to DLX
-- DLX routes to Dead Letter Queue (DLQ) for manual inspection or retry
-
-**Common triggers for DLX:**
+**Common triggers:**
 
 1. Message rejected with nack(requeue=False)
-2. Message TTL (Time To Live) expires
-3. Queue reaches max-length limit
+2. Message TTL expires
+3. Queue reaches max-length
 
 **Why use it:**
 
-- Prevents message loss even when processing fails repeatedly
-- Allows debugging - inspect failed messages
-- Can implement retry logic - process DLQ messages later
+- Prevents message loss even when processing repeatedly fails
+- Allows debugging—inspect failed messages
+- Enables retry logic—process DLQ messages later
 
-**Real-world use:** Error handling, delayed retry queues, message timeouts, debugging production issues.
+**Real-world:** Error handling, delayed retry queues, debugging production issues.
+
+---
 
 ### Message Persistence
 
-**What it means:** Messages and queues survive RabbitMQ broker restarts.
+Messages and queues survive RabbitMQ broker restarts.
 
 **Two parts:**
 
 1. **Durable queues:** Queue definition survives restart
-2. **Persistent messages:** Message data survives restart (delivery_mode=2)
+2. **Persistent messages:** Message data survives restart (`delivery_mode=2`)
 
-**How it works in this demo:**
+**In this demo:** All queues declared `durable=True`, all messages published with `delivery_mode=2`.
 
-```python
-# Durable queue
-channel.queue_declare(queue='orders.standard', durable=True)
+**Trade-off:** Persistence is slower (disk I/O) but safer.
 
-# Persistent message
-properties = pika.BasicProperties(delivery_mode=2)
-channel.basic_publish(..., properties=properties)
-```
+**Real-world:** Financial transactions, order confirmations, anything that can't be lost.
 
-**Why use it:**
-
-- Without it: Broker restart = all messages lost
-- With it: Messages safely stored to disk
-
-**Trade-off:** Persistence is slower (disk I/O) but safer. Use for critical messages.
-
-**Real-world use:** Financial transactions, order confirmations, anything that can't be lost.
+---
 
 ### RPC (Remote Procedure Call) Pattern
 
-**What it is:** Synchronous request/response over asynchronous messaging.
+Synchronous request/response over asynchronous messaging.
 
-**How it works in this demo:**
+**How it works:**
 
-1. Client generates unique `correlation_id` for request
+1. Client generates unique `correlation_id`
 2. Client creates exclusive `reply_to` queue for responses
 3. Client publishes request with both properties
-4. Server processes request
-5. Server publishes response to `reply_to` queue with same `correlation_id`
-6. Client matches response using `correlation_id`
+4. Server processes and responds to `reply_to` queue with same `correlation_id`
+5. Client matches response using `correlation_id`
 
-**Key components:**
+**In this demo:** Client checks inventory, server responds with stock levels.
 
-- **correlation_id:** Unique ID to match request with response (like a tracking number)
-- **reply_to:** Queue name where response should be sent
-- **exclusive queue:** Auto-deleted callback queue for responses
+**Why use it:** When you **need a response** before continuing (e.g., check inventory before processing order).
 
-**Why use it:**
+**When NOT to use:** If you don't need a response, use regular pub/sub—RPC adds complexity and latency.
 
-- When you NEED a response (e.g., check inventory before processing order)
-- Adds synchronous behavior on top of async messaging
-- Client waits for response before continuing
+**Real-world:** API gateways, microservice communication requiring responses, distributed systems.
 
-**When NOT to use:** If you don't need a response, use regular pub/sub - RPC adds complexity and latency.
+---
 
-**Real-world use:** API gateways, microservice communication where response is required, distributed systems needing request/reply.
+## 📁 Project Structure
+
+```
+src/
+├── config.py           # Configuration and constants
+├── connection.py       # RabbitMQ connection helper
+├── setup.py            # Infrastructure setup (exchanges/queues/bindings)
+├── demo.py             # Main demo CLI
+├── producer.py         # Order publisher
+├── worker.py           # Order processor (work queue consumer)
+├── notification.py     # Notification service (fanout subscriber)
+├── analytics.py        # Analytics service (fanout subscriber)
+├── log_consumer.py     # Log service (topic subscriber)
+└── rpc.py              # RPC server and client
+```
+
+## 🎓 Learning Exercises
+
+### 1. Experiment with Exchange Types
+
+- Run the full demo and observe how direct exchange routes orders
+- Notice how fanout broadcasts the same event to notifications AND analytics
+- See how topic exchange matches log patterns
+
+### 2. Test Message Reliability
+
+**Challenge:** What happens if a worker crashes mid-processing?
+
+```bash
+# Terminal 1
+pdm run demo worker W1
+
+# Terminal 2
+pdm run demo produce
+
+# In Terminal 1: Kill with Ctrl+C while processing
+# Start another worker and see message recovery!
+```
+
+### 3. Load Balancing with Multiple Workers
+
+```bash
+# Terminal 1
+pdm run demo worker W1
+
+# Terminal 2
+pdm run demo worker W2
+
+# Terminal 3
+pdm run demo produce
+```
+
+Watch how messages distribute between workers!
+
+### 4. Dead Letter Queues
+
+Check the management UI at http://localhost:15672 after running the demo. Look for messages in the `orders.failed` queue (10% failure rate is simulated).
+
+### 5. RPC Pattern
+
+```bash
+# Terminal 1
+pdm run demo rpc-server
+
+# Terminal 2
+pdm run demo rpc-client
+```
+
+Notice how the client **waits** for responses—synchronous communication over async messaging!
 
 ## 🧰 Development Commands
 
@@ -394,90 +315,86 @@ pdm run chk        # Check code with ruff
 pdm run typechk    # Type check with mypy
 pdm run lint       # Run both checks
 pdm run fint       # Format and lint
-pdm run test       # Run tests
 
 # RabbitMQ
 pdm run rabbitup   # Start RabbitMQ
 pdm run rabbitdown # Stop RabbitMQ
 ```
 
-## 🐛 Troubleshooting
+## ⚠️ Out of Scope (Production Considerations)
 
-**Connection refused:**
+This is a **learning demo** focused on core RabbitMQ concepts. The following production-critical features are intentionally NOT implemented:
 
-- Ensure RabbitMQ is running: `docker ps | grep rabbitmq`
-- Start it: `pdm run rabbitup`
+### Publisher Confirms
 
-**Messages not being processed:**
+**What it is:** Confirmation from RabbitMQ that a message was successfully received and persisted.
 
-- Check if workers are running
-- Verify queues exist in management UI (http://localhost:15672)
-- Run `setup` command first
+**Why it matters:** Without confirms, you have no guarantee your `basic_publish()` succeeded. The broker could reject it, run out of disk, or crash—and you'd never know.
 
-**Type errors:**
+**How to implement:**
 
-- Run `pdm run typechk` to see all type issues
-- Ensure Python 3.13 is being used
+```python
+channel.confirm_delivery()  # Enable confirm mode
+try:
+    channel.basic_publish(...)  # Raises exception if not confirmed
+except pika.exceptions.UnroutableError:
+    # Handle failure
+```
 
-## 📚 Learning Resources
-
-- [RabbitMQ Tutorials](https://www.rabbitmq.com/getstarted.html)
-- [Pika Documentation](https://pika.readthedocs.io/)
-- [Exchange Types Explained](https://www.rabbitmq.com/tutorials/amqp-concepts.html#exchanges)
-
-## 🎓 Learning Exercises
-
-### 1. Understanding Exchange Types
-
-**Exercise:** Observe how each exchange type behaves differently.
-
-- Start the demo and watch how direct exchange routes orders to specific queues
-- Notice how fanout exchange sends the SAME event to both notification and analytics
-- See how topic exchange uses pattern matching with routing keys
-
-**Key learning:** Each exchange type solves different routing needs - exact match, broadcast all, or pattern-based.
-
-### 2. Message Reliability
-
-**Challenge:** What happens if a worker crashes mid-processing?
-
-- Start a worker and publish orders
-- Kill the worker (Ctrl+C) while it's processing
-- Notice RabbitMQ redelivers the message to another worker
-
-**Key learning:** Manual acknowledgments prevent message loss. Messages aren't removed until successfully processed.
-
-### 3. Load Balancing with QoS
-
-**Experiment:** See fair dispatch in action.
-
-- Start 2 workers for the same queue type
-- Publish several orders
-- Watch how messages are distributed
-
-**Key learning:** With `prefetch_count=1`, faster workers automatically get more work. Without it, distribution would be strictly round-robin regardless of processing speed.
-
-### 4. Dead Letter Queues
-
-**Test:** Trigger message failures.
-
-- Check the DLX/DLQ configuration in `exchanges.py`
-- Modify a worker to intentionally fail (throw exception)
-- Watch failed messages route to the dead letter queue
-- Inspect them in the management UI
-
-**Key learning:** DLX provides automatic failure handling - messages aren't lost, they're quarantined for inspection.
-
-### 5. RPC Pattern
-
-**Exploration:** Understand synchronous communication over async messaging.
-
-- Start rpc-server, then run rpc-client
-- Notice the client WAITS for responses
-- Check how correlation_id matches requests to responses in the code
-
-**Key learning:** RPC adds request/response semantics on top of message queues. Good for when you need an answer, but adds latency.
+**Production impact:** Critical for financial transactions, orders, or any data you can't afford to lose.
 
 ---
 
-**Happy learning!** 🚀 Experiment, break things, and see how RabbitMQ handles it!
+### Connection Reliability
+
+**Missing features:**
+
+1. **Heartbeats** - No heartbeat monitoring configured. Idle connections may be closed unexpectedly.
+2. **Automatic Reconnection** - If connection drops, our consumers/producers don't reconnect.
+3. **Connection Timeouts** - No `socket_timeout` or `blocked_connection_timeout` set.
+
+**Why it matters:** Production RabbitMQ connections experience network hiccups, broker restarts, and load-balancer timeouts. Without retry logic, your application stops working.
+
+**How to implement:**
+
+```python
+# Add to connection parameters:
+parameters = pika.ConnectionParameters(
+    host=config.RABBITMQ_HOST,
+    heartbeat=600,  # Send heartbeat every 10min
+    blocked_connection_timeout=300,
+    socket_timeout=10,
+)
+
+# Use pika's connection adapters with retry logic
+# or libraries like pika-pool for connection pooling
+```
+
+---
+
+### Thread Safety
+
+**The issue:** Pika's `BlockingConnection` is NOT thread-safe. Our full demo uses threads, which technically violates this.
+
+**Why it works here:** Each thread creates its own connection/channel. But sharing a connection across threads would cause crashes.
+
+**Production solution:**
+
+- Use one connection per thread
+- Or use `SelectConnection` (async, event-driven)
+- Or use libraries specifically designed for threading (e.g., `pika-pool`)
+
+---
+
+### Additional Concepts Not Covered
+
+| Concept                   | Why Omitted                        | Production Use                                           |
+| ------------------------- | ---------------------------------- | -------------------------------------------------------- |
+| **Headers Exchange**      | Rarely used, complex for beginners | Routing based on message headers instead of routing keys |
+| **Alternate Exchange**    | Advanced routing scenario          | Fallback for unroutable messages                         |
+| **TTL (Time-To-Live)**    | Mentioned but not demonstrated     | Auto-expire old messages                                 |
+| **Priority Queues**       | Specialized use case               | Process urgent messages first                            |
+| **Lazy Queues**           | Operational optimization           | Move messages to disk early to save RAM                  |
+| **Quorum Queues**         | Availability/replication concern   | Replicated queues for high availability                  |
+| **Consumer Cancellation** | Edge case handling                 | Graceful shutdown when queue deleted                     |
+| **Flow Control**          | Advanced backpressure              | Handle slow consumers gracefully                         |

@@ -3,7 +3,7 @@ name = "rabbit-py"
 version = "0.1.0"
 description = "Default template for PDM package"
 authors = [{name = "Guy Chait", email = "53366531+gchait@users.noreply.github.com"}]
-requires-python = "==3.13.*"
+requires-python = ">=3.10"
 readme = "README.md"
 license = {text = "MIT"}
 
@@ -37,6 +37,7 @@ venv = ".venv"
 [tool.pdm.scripts]
 rabbitup = "docker compose up -d rabbitmq"
 rabbitdown = "docker compose down -v rabbitmq"
+demo = "python -m src.demo"
 
 fmt = "ruff format ."
 chk = "ruff check --fix ."
